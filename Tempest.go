@@ -1,4 +1,4 @@
-// MET API with Temperature & Relative Humidity data from GPS location
+// MET API: Temperature & Relative Humidity from GPS location
 package main
 
 import (
@@ -41,13 +41,13 @@ func init() {
 		fmt.Println("Unmarshal Sensors: %w", err)
 	}
 	lastModified, err = time.Parse(time.RFC3339Nano, data.Properties.Meta.UpdatedAt)
-	expires = lastModified // not quite...
+	expires = lastModified // Todo: Check expires with Head
 }
 
 func main() {
 	// Get again if over an hour since last modified
 	if expires.Before(time.Now().Add(-time.Hour * 1)) {
-		fmt.Println("Data expired - Get again..", expires, time.Now())
+		fmt.Println("Data expired - Get again..")
 		// then look at lastModified, then download.
 		getSensors()
 	} else {
@@ -60,7 +60,6 @@ func main() {
 		rh := forecast.Data.Instant.Details.RelativeHumidity
 		fmt.Printf("%v\t\t%.1f C\t\t%.1f rH\n", ts.Format("01.02 15:04"), t, rh)
 	}
-
 }
 
 func getSensors() {
