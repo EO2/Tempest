@@ -1,4 +1,5 @@
-// MET API: Temperature & Relative Humidity from GPS location
+// Temperature & Relative Humidity from GPS location (https://github.com/EO2/Tempest)
+// Data from The Norwegian Meteorological Institute (https://api.met.no/doc/)
 package main
 
 import (
@@ -14,25 +15,25 @@ import (
 const (
 	versionUpper uint8   = 0
 	versionLower uint8   = 1
-	lat          float32 = 60.3929
+	lat          float32 = 60.3929 // max 4 decimal coords
 	lon          float32 = 5.3241
-	alt          int8    = 0    // alt altitude / msl meters above sea level / negative number? / 5 default
-	debug        bool    = true // false
+	alt          int8    = 0 // meters above sea level. Negative number possible.. 5 default
 )
 
 var (
-	userAgent string = fmt.Sprintf("Tempest/%v.%v github.com/EO2", versionUpper, versionLower)
+	userAgent string = fmt.Sprintf("Tempest/%d.%d github.com/EO2", versionUpper, versionLower)
 	url       string = fmt.Sprintf("https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=%.4f&lon=%.4f&altitude=%d", lat, lon, alt)
 )
 
 var (
 	data         Sensors
-	updatedAt    time.Time
 	lastModified time.Time
 	expires      time.Time
 )
 
 func init() {
+	fmt.Printf("Tempest v.%d.%d\n", versionUpper, versionLower)
+	fmt.Println("Get Weather Forecasts from MET.no API")
 	content, errJSON := ioutil.ReadFile("Sensors.json")
 	if errJSON != nil {
 		fmt.Println(errJSON)
@@ -41,46 +42,27 @@ func init() {
 	if err != nil {
 		fmt.Println("Unmarshal Sensors: %w", err)
 	}
-	updatedAt, err = time.Parse(time.RFC3339, data.Properties.Meta.UpdatedAt)
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 func main() {
-	// Get if over an hour since last modified
-	// hourAgo := time.Now().Add(-time.Hour * 1)
-	/* Todo:
-	Compression (Accept-Encoding: gzip, deflate) as described in RFC 2616.
-	Redirects yes
-	cache headers, see RFC 2616. For example, use If-Modified-Since requests if the Last-Modified header exists.
-	Note that the If-Modified-Since header should be identical to the previous Last-Modified,
-	not any random timestamp (and definitely not in the future).
-	If 429 - Throttling: Limit traffic / request frequency
-	Randomize interval (30 - 60 min?)
-	*/
+	// Get Weather from MET.no API
+	for {
+		if expires.IsZero() || expires.Before(time.Now()) {
+			getSensors()
+			fmt.Println("MET Forecast:", time.Now().Format(time.RFC1123), "> ", data.Properties.Timeseries[0].Data.Instant.Details.AirTemperature, "℃ ", data.Properties.Timeseries[0].Data.Instant.Details.RelativeHumidity, "% RH")
 
-	if debug {
-		fmt.Println("updatedAt", updatedAt.Format(time.RFC1123))
-		fmt.Println("Last-Modified:", lastModified.Format(time.RFC1123))
-		fmt.Println("Expires:", expires.Format(time.RFC1123))
+			//fmt.Println(data.Properties.Timeseries[0].Data.Instant.Details.AirTemperature)
+			//fmt.Println(data.Properties.Timeseries[0].Data.Instant.Details.RelativeHumidity)
+
+			/*for _, forecast := range data.Properties.Timeseries {
+				ts, _ := time.Parse(time.RFC3339, forecast.Time)
+				t := forecast.Data.Instant.Details.AirTemperature
+				rh := forecast.Data.Instant.Details.RelativeHumidity
+				fmt.Printf("%v\t\t%.1f C\t\t%.1f rH\n", ts.Format("01.02 15:04"), t, rh)
+			}*/
+		}
+		time.Sleep(5 * time.Minute)
 	}
-
-	if expires.Before(time.Now().Add(-time.Minute * 1)) {
-		fmt.Println("Expired - ReGet..")
-		getSensors()
-		time.Sleep(5 * time.Second)
-		getSensors()
-	}
-
-	//fmt.Println(data.Properties.Timeseries[0].Data.Instant.Details.AirTemperature)
-
-	/*for _, forecast := range data.Properties.Timeseries {
-		ts, _ := time.Parse(time.RFC3339, forecast.Time)
-		t := forecast.Data.Instant.Details.AirTemperature
-		rh := forecast.Data.Instant.Details.RelativeHumidity
-		fmt.Printf("%v\t\t%.1f C\t\t%.1f rH\n", ts.Format("01.02 15:04"), t, rh)
-	}*/
 }
 
 func getSensors() {
@@ -93,7 +75,9 @@ func getSensors() {
 
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("If-Modified-Since", lastModified.Format(time.RFC1123))
+	if !lastModified.IsZero() {
+		req.Header.Set("If-Modified-Since", lastModified.Format(time.RFC1123))
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -111,7 +95,7 @@ func getSensors() {
 		}
 		if resp.StatusCode == 304 {
 			fmt.Println("MET: 304 - Resource Not Modified")
-			return // Still need to save Expires and Last-Modified? Test..
+			return // No Body
 		}
 		log.Fatalf("MET Response StatusCode: %v", resp.StatusCode)
 	}
@@ -124,15 +108,6 @@ func getSensors() {
 	lastModified, err = time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if debug {
-		fmt.Println("updatedAt:", updatedAt.Format(time.RFC1123))
-		fmt.Println("Last-Modified:", lastModified.Format(time.RFC1123))
-		fmt.Println("Expires:", expires.Format(time.RFC1123))
-		fmt.Println("Req Header:", req.Header)
-		fmt.Println("Resp Header:", resp.Header)
-		fmt.Println("Gzipped?:", resp.Uncompressed) // yes
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
@@ -148,33 +123,4 @@ func getSensors() {
 	if err := os.WriteFile("Sensors.json", body, 0666); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func checkModified() {
-	// Head request to check if file is changed, without downloading json body.
-	req, err := http.NewRequest("HEAD", url, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Todo: any readon to use app/json here? should not.
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("If-Modified-Since", lastModified.Format(time.RFC1123))
-
-	if debug {
-		fmt.Println(req.Header)
-	}
-
-	resp, err := new(http.Client).Do(req) // Todo: reuse client, need to close?
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if debug {
-		fmt.Println(resp.StatusCode)
-	}
-
-	// if 200, return ok. Then get request for data
-	//fmt.Println(resp.StatusCode == 200)
-	//fmt.Println(resp)
 }
