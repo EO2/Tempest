@@ -1,8 +1,8 @@
-// Sensor weather data and predictions from JSON => Struct
+// Sensor weather data - Auto JSON => Struct
 package main
 
 // AutoStruct: http://json2struct.mervine.net/
-// Needed to fix some ints that where floats + using float32 intead of 64.
+// Fixed some ints that where floats + using float32 intead of 64.
 
 type Sensors struct {
 	Geometry struct {
