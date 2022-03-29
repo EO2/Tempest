@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	userAgent string = fmt.Sprintf("Tempest/%d.%d github.com/EO2", versionUpper, versionLower)
+	userAgent string = fmt.Sprintf("Tempest/%d.%d github.com/EO2/Tempest", versionUpper, versionLower)
 	url       string = fmt.Sprintf("https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=%.4f&lon=%.4f&altitude=%d", lat, lon, alt)
 )
 

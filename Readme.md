@@ -4,9 +4,9 @@
 
 *Get Temperature & Relative Humidity ++*
 
-> Created to get data for a thermostat app, mostly for learning and experimenting.
-> Runs a for-ever loop and outputs json file, temperature celcius and relative humidity.
-> Feel free to comment :)
+Created to get data for a thermostat app, mostly for learning and experimenting.
+Runs a for-ever loop and outputs json file, temperature celcius and relative humidity.
+Feel free to comment :)
 
 > ### Data from The Norwegian Meteorological Institute
 > - https://api.met.no/weatherapi/
